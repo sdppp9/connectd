@@ -57,6 +57,12 @@ export function ResultTable({ result, exporting, onExport, onSave }: Props): Rea
   const [menuOpen, setMenuOpen] = useState(false)
   const [filter, setFilter] = useState('')
   const [sort, setSort] = useState<SortState | null>(null)
+  /** Highlighted row (index into `rows`, so it survives sorting and filtering). */
+  const [selectedRow, setSelectedRow] = useState<number | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  // Mirror for key repeat: several keydowns can arrive before React re-renders.
+  const selectedRef = useRef<number | null>(null)
+  selectedRef.current = selectedRow
 
   // Reset local state whenever a new result arrives.
   useEffect(() => {
@@ -65,6 +71,7 @@ export function ResultTable({ result, exporting, onExport, onSave }: Props): Rea
     setEditing(null)
     setFilter('')
     setSort(null)
+    setSelectedRow(null)
   }, [result])
 
   const editable = result.editable
@@ -205,6 +212,29 @@ export function ResultTable({ result, exporting, onExport, onSave }: Props): Rea
 
   const dirtyCount = changes.length
 
+  /** Up/Down move the highlighted row in display order; Escape clears it. */
+  function handleGridKey(e: React.KeyboardEvent<HTMLDivElement>): void {
+    if (editing || (e.target as HTMLElement).closest('input, textarea')) return
+    if (e.key === 'Escape') {
+      setSelectedRow(null)
+      return
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    if (view.length === 0) return
+    e.preventDefault()
+    const pos = view.findIndex((v) => v.i === selectedRef.current)
+    const nextPos =
+      pos === -1
+        ? e.key === 'ArrowDown' ? 0 : view.length - 1
+        : Math.min(view.length - 1, Math.max(0, pos + (e.key === 'ArrowDown' ? 1 : -1)))
+    const next = view[nextPos].i
+    selectedRef.current = next
+    setSelectedRow(next)
+    scrollRef.current
+      ?.querySelector(`tr[data-row="${next}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
@@ -287,7 +317,12 @@ export function ResultTable({ result, exporting, onExport, onSave }: Props): Rea
       </div>
 
       {/* Table */}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div
+        ref={scrollRef}
+        tabIndex={0}
+        onKeyDown={handleGridKey}
+        className="min-h-0 flex-1 scroll-pt-8 overflow-auto outline-none"
+      >
         <table className="w-full border-collapse text-[13px]">
           <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800">
             <tr>
@@ -330,9 +365,22 @@ export function ResultTable({ result, exporting, onExport, onSave }: Props): Rea
             {view.map(({ row, i: rowIdx }, viewIdx) => (
               <tr
                 key={rowIdx}
-                className="odd:bg-white even:bg-slate-50/60 hover:bg-indigo-500/5 dark:odd:bg-slate-900 dark:even:bg-slate-800/40"
+                data-row={rowIdx}
+                aria-selected={selectedRow === rowIdx}
+                onClick={() => setSelectedRow((s) => (s === rowIdx ? null : rowIdx))}
+                className={
+                  selectedRow === rowIdx
+                    ? 'bg-indigo-100 dark:bg-indigo-500/25'
+                    : 'odd:bg-white even:bg-slate-50/60 hover:bg-indigo-500/5 dark:odd:bg-slate-900 dark:even:bg-slate-800/40'
+                }
               >
-                <td className="border-b border-r border-slate-100 px-2 py-1 text-right text-[11px] text-slate-400 dark:border-slate-800">
+                <td
+                  className={`border-b border-r border-slate-100 px-2 py-1 text-right text-[11px] dark:border-slate-800 ${
+                    selectedRow === rowIdx
+                      ? 'font-semibold text-indigo-600 shadow-[inset_3px_0_0] shadow-indigo-500 dark:text-indigo-300'
+                      : 'text-slate-400'
+                  }`}
+                >
                   {viewIdx + 1}
                 </td>
                 {result.columns.map((col) => {

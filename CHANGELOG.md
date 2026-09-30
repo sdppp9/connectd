@@ -6,6 +6,14 @@ follow [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-30
+
+### Added
+- Click a row in the result grid to highlight the whole record, so it stays easy to follow
+  while scrolling left and right through many columns. Click it again (or press Esc) to clear.
+  With the grid focused, ↑ / ↓ move the highlight and scroll it into view. The highlight
+  follows the record when you sort or filter.
+
 ## [1.1.0] - 2026-09-30
 
 ### Added
@@ -35,5 +43,6 @@ First release.
   `pg_dump --inserts` files.
 - Windows build as a zip (unzip and run `ConnectD.exe`).
 
-[Unreleased]: https://github.com/sdppp9/connectd/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/sdppp9/connectd/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/sdppp9/connectd/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sdppp9/connectd/releases/tag/v1.1.0
