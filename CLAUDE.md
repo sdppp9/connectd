@@ -21,6 +21,8 @@ The owner writes in Thai; reply in Thai.
 Several small edits in one session are one release, not one version each.
 
 ## Checks
+- The GitHub repo (sdppp9/connectd) is **public**: never commit credentials, real hostnames,
+  database dumps or test data from the owner's databases.
 - `npm run typecheck` must pass.
 - Databases the owner connects to include production: destructive operations must show the
   exact SQL and require typed confirmation.
