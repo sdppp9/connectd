@@ -3,6 +3,55 @@
 Desktop database client for **MySQL / MariaDB** and **PostgreSQL**, built with
 Electron + React + TypeScript.
 
+## Download & install (Windows 10/11, 64-bit)
+
+1. Open the [latest release](https://github.com/sdppp9/connectd/releases/latest) and download
+   `ConnectD-<version>-win-x64.zip` under **Assets**.
+2. Right-click the zip → **Properties** → tick **Unblock** → **OK**.
+3. Right-click → **Extract All…** to a permanent folder, e.g. `C:\Apps\ConnectD`.
+4. Run `ConnectD.exe`. No installer and no admin rights needed.
+5. Windows may show **"Windows protected your PC"** the first time because the app is not
+   code-signed. Click **More info → Run anyway**.
+
+**Update:** download the new zip and extract it over the old folder (or to a new one). Your
+connections, history and settings live in `%APPDATA%\ConnectD`, not in the app folder, so they
+are kept.
+
+**Uninstall:** delete the app folder. To also remove saved connections and history, delete
+`%APPDATA%\ConnectD`.
+
+## Quick start
+
+1. Click **+** in the sidebar → enter host, port, user, password (and optionally a database) →
+   **Test** → **Save**.
+2. Click the connection to connect. Tables and columns appear in the sidebar.
+3. Type SQL in the editor (autocomplete suggests tables and columns) and press
+   **Ctrl + Enter** or **Run**. Highlight part of the script to run only that part.
+4. Double-click a cell in the result to edit it, then **Save changes**.
+5. **Compare & Sync** and **Backup** are in the top bar. Back up before syncing to production.
+6. Moving to another PC: use **Export connections** in the sidebar header, then
+   **Import connections** on the other machine.
+
+<details>
+<summary>วิธีติดตั้ง (ภาษาไทย)</summary>
+
+1. เข้า [หน้า Release ล่าสุด](https://github.com/sdppp9/connectd/releases/latest) แล้วโหลด
+   `ConnectD-<version>-win-x64.zip` ในหัวข้อ **Assets**
+2. คลิกขวาไฟล์ zip → **Properties** → ติ๊ก **Unblock** → **OK**
+3. คลิกขวา → **Extract All…** ไปไว้ในโฟลเดอร์ถาวร เช่น `C:\Apps\ConnectD`
+4. เปิด `ConnectD.exe` ได้เลย ไม่ต้องติดตั้ง ไม่ต้องใช้สิทธิ์ admin
+5. ถ้าขึ้น **"Windows protected your PC"** ให้กด **More info → Run anyway**
+   (ขึ้นเพราะโปรแกรมยังไม่ได้เซ็นชื่อผู้พัฒนา ไม่ใช่ไวรัส)
+
+**อัปเดต:** โหลด zip ใหม่แล้วแตกทับโฟลเดอร์เดิม connection, history และการตั้งค่าเก็บอยู่ใน
+`%APPDATA%\ConnectD` จึงไม่หาย
+
+**ใช้งาน:** กด **+** เพิ่ม connection → **Test** → **Save** → คลิกเพื่อเชื่อมต่อ → พิมพ์ SQL แล้วกด
+**Ctrl + Enter** · ดับเบิลคลิกช่องในตารางผลลัพธ์เพื่อแก้ไข แล้วกด **Save changes** ·
+ปุ่ม **Compare & Sync** และ **Backup** อยู่แถบด้านบน
+
+</details>
+
 ## Features
 
 - **Saved connections** — store host / port / user / password / database. Passwords are
