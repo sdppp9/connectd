@@ -131,6 +131,10 @@ This produces a single artifact in `release/`:
 `npm run install:local` (after `dist:win`) installs that build for the current user in
 `%LOCALAPPDATA%\Programs\ConnectD` and adds Desktop and Start Menu shortcuts. Run it again
 after each build to update; saved connections are kept.
+It also adds an uninstaller: **Start Menu → Uninstall ConnectD**, or **Settings → Apps →
+Installed apps → ConnectD → Uninstall**. It asks whether to delete saved connections and
+history too (default: keep). `npm run uninstall:local` removes the app without asking and keeps
+the data.
 
 ### Why zip and not an installer / portable .exe?
 
