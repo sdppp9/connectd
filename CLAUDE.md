@@ -14,7 +14,10 @@ The owner writes in Thai; reply in Thai.
    Use `npm version <patch|minor|major> --no-git-tag-version` so package.json and
    package-lock.json stay in sync. Move the `[Unreleased]` notes under the new version heading
    with today's date and update the compare links at the bottom.
-3. `npm run typecheck`, then `npm run dist:win` (the zip name carries the version).
+3. `npm run typecheck`, then `npm run dist:win` (the zip name carries the version), then
+   `npm run install:local` to update the owner's installed copy
+   (`%LOCALAPPDATA%\Programs\ConnectD`, opened from the Desktop / Start Menu shortcut).
+   It refuses while ConnectD is running; ask the owner to close it.
 4. Commit (`Release vX.Y.Z` for the version bump), tag `vX.Y.Z`, push with tags, and create a
    GitHub release: `gh release create vX.Y.Z release/ConnectD-X.Y.Z-win-x64.zip --notes-file <that version's changelog section>`.
 

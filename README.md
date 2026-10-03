@@ -128,6 +128,10 @@ This produces a single artifact in `release/`:
 
 `npm run dist:dir` produces the same app as an unzipped `release/win-unpacked/` folder.
 
+`npm run install:local` (after `dist:win`) installs that build for the current user in
+`%LOCALAPPDATA%\Programs\ConnectD` and adds Desktop and Start Menu shortcuts. Run it again
+after each build to update; saved connections are kept.
+
 ### Why zip and not an installer / portable .exe?
 
 The build is **not code-signed**, and unsigned NSIS installers / self-extracting portable
