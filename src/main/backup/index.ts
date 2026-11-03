@@ -17,7 +17,7 @@ import type {
 import { dumpMySql, mysqlOptions } from './mysqlDump'
 import { dumpPostgres, pgOptions } from './pgDump'
 import { SqlSplitter } from './splitter'
-import { CancelledError, checkCancelled, DumpWriter, throttle, type Job } from './writer'
+import { CancelledError, checkCancelled, DumpWriter, throttle, type DumpContents, type Job } from './writer'
 
 export { CancelledError, type Job } from './writer'
 
@@ -40,16 +40,26 @@ export function backupFolder(): string {
   return dir
 }
 
-export function defaultBackupPath(connectionName: string, database: string, compress: boolean): string {
-  return join(backupFolder(), `${safeName(connectionName)}_${safeName(database)}_${stamp()}.sql${compress ? '.gz' : ''}`)
+export function defaultBackupPath(
+  connectionName: string,
+  database: string,
+  compress: boolean,
+  label = ''
+): string {
+  const tag = label ? `_${label}` : ''
+  return join(
+    backupFolder(),
+    `${safeName(connectionName)}_${safeName(database)}${tag}_${stamp()}.sql${compress ? '.gz' : ''}`
+  )
 }
+
 
 export async function runBackup(
   config: ConnectionConfig,
   password: string | undefined,
   database: string,
   filePath: string,
-  includeData: boolean,
+  contents: DumpContents,
   job: Job,
   onProgress: Progress
 ): Promise<BackupResult> {
@@ -58,7 +68,7 @@ export async function runBackup(
   const progress = throttle(onProgress)
   try {
     const dump = config.type === 'postgres' ? dumpPostgres : dumpMySql
-    const { tables, rows } = await dump(config, password, database, w, includeData, job, progress)
+    const { tables, rows } = await dump(config, password, database, w, contents, job, progress)
     await w.close()
     progress.flush()
     return { filePath, tables, rows, bytes: w.bytes, durationMs: Date.now() - started }

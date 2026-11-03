@@ -1,6 +1,6 @@
 import pg from 'pg'
 import type { ConnectionConfig, JobProgress } from '../../shared/types'
-import { checkCancelled, type DumpWriter, type Job } from './writer'
+import { checkCancelled, describeContents, type DumpContents, type DumpWriter, type Job } from './writer'
 
 const INSERT_BYTES = 1024 * 1024
 const FETCH_ROWS = 1000
@@ -68,12 +68,13 @@ export async function dumpPostgres(
   password: string | undefined,
   database: string,
   w: DumpWriter,
-  includeData: boolean,
+  contents: DumpContents,
   job: Job,
   progress: Progress
 ): Promise<{ tables: number; rows: number }> {
   const client = new pg.Client(pgOptions(config, password, database))
   await client.connect()
+  const { includeData, sampleRows } = contents
   let totalRows = 0
   try {
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY')
@@ -226,7 +227,7 @@ export async function dumpPostgres(
       `-- Database: ${database}`,
       `-- Server: ${info.ver}`,
       `-- Created: ${new Date().toISOString()}`,
-      `-- Contents: ${includeData ? 'structure + data' : 'structure only'}`,
+      `-- Contents: ${describeContents(contents)}`,
       '',
       'SET statement_timeout = 0;',
       'SET lock_timeout = 0;',
@@ -320,7 +321,8 @@ export async function dumpPostgres(
       const head = `INSERT INTO ${name} (${dataCols.map((c) => qi(c.name)).join(', ')})${overriding} VALUES\n`
 
       await client.query(
-        `DECLARE connectd_dump NO SCROLL CURSOR FOR SELECT ${dataCols.map((c) => qi(c.name)).join(', ')} FROM ONLY ${name}`
+        `DECLARE connectd_dump NO SCROLL CURSOR FOR SELECT ${dataCols.map((c) => qi(c.name)).join(', ')} FROM ONLY ${name}` +
+          (sampleRows !== undefined ? ` LIMIT ${Math.max(0, Math.floor(sampleRows))}` : '')
       )
       let batch: string[] = []
       let batchBytes = 0
@@ -369,8 +371,11 @@ export async function dumpPostgres(
       post.push(`ALTER TABLE ${nameOf.get(c.rel)} ADD CONSTRAINT ${qi(c.name)} ${c.def};`)
     }
     for (const ix of indexes) if (tableSet.has(ix.rel)) post.push(`${ix.def};`)
+    // Sampled rows can point at rows that were not sampled: keep the foreign keys but
+    // skip checking existing rows (NOT VALID); new rows are still checked.
     for (const c of constraints.filter((x) => x.type === 'f')) {
-      post.push(`ALTER TABLE ${nameOf.get(c.rel)} ADD CONSTRAINT ${qi(c.name)} ${c.def};`)
+      const def = sampleRows !== undefined && !/\bNOT VALID\s*$/i.test(c.def) ? `${c.def} NOT VALID` : c.def
+      post.push(`ALTER TABLE ${nameOf.get(c.rel)} ADD CONSTRAINT ${qi(c.name)} ${def};`)
     }
 
     // ---- Views in dependency order ----

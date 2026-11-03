@@ -89,3 +89,16 @@ export function throttle<T>(fn: (v: T) => void, ms = 150): ((v: T) => void) & { 
   }
   return wrapped
 }
+
+/** What a dump contains: everything, structure only, or structure + the first N rows. */
+export interface DumpContents {
+  includeData: boolean
+  /** Rows per table when sampling; undefined = all rows. */
+  sampleRows?: number
+}
+
+export function describeContents(c: DumpContents): string {
+  if (!c.includeData) return 'structure only'
+  if (c.sampleRows !== undefined) return `structure + sample data (up to ${c.sampleRows} rows per table)`
+  return 'structure + data'
+}

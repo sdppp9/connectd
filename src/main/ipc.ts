@@ -265,7 +265,13 @@ export function registerIpc(): void {
     'backup:run',
     async (event, jobId: string, connectionId: string, database: string, opts: BackupOptions) => {
       const config = requireConfig(connectionId)
-      let filePath = defaultBackupPath(config.name, database, opts.compress)
+      let sampleRows: number | undefined
+      if (opts.includeData && opts.sampleRows !== undefined) {
+        sampleRows = Math.floor(Number(opts.sampleRows))
+        if (!(sampleRows >= 1 && sampleRows <= 1_000_000)) throw new Error('Sample rows must be between 1 and 1,000,000')
+      }
+      const label = !opts.includeData ? 'structure' : sampleRows !== undefined ? `sample${sampleRows}` : ''
+      let filePath = defaultBackupPath(config.name, database, opts.compress, label)
       if (opts.target === 'ask') {
         const win = BrowserWindow.fromWebContents(event.sender) ?? undefined
         const res = await dialog.showSaveDialog(win!, {
@@ -289,14 +295,14 @@ export function registerIpc(): void {
           connections.getPassword(connectionId),
           database,
           filePath,
-          opts.includeData,
+          { includeData: opts.includeData, sampleRows },
           job,
           (p) => event.sender.send('job:progress', { ...p, jobId })
         )
         history.add({
           connectionId,
           connectionName: `${config.name} · backup`,
-          sql: `-- Backup of ${database} → ${result.filePath}`,
+          sql: `-- ${opts.includeData && sampleRows === undefined ? 'Backup' : 'Structure export'} of ${database} → ${result.filePath}`,
           ok: true,
           rowCount: result.rows,
           durationMs: Date.now() - start

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Download,
   Save,
@@ -40,32 +40,95 @@ function compareValues(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b))
 }
 
+type EditMap = Record<number, Record<string, unknown>>
+
+/**
+ * What the grid shows for one result: unsaved edits, values written back after a save,
+ * filter, sort, highlighted row and scroll position. The grid is remounted when the
+ * user switches query tabs, so the parent keeps this per tab and hands it back.
+ */
+export interface ResultViewState {
+  /** The result this state belongs to; ignored once the tab gets a new result. */
+  result: QueryResult
+  rows: Record<string, unknown>[]
+  edits: EditMap
+  filter: string
+  sort: SortState | null
+  selectedRow: number | null
+  scrollTop: number
+  scrollLeft: number
+}
+
 interface Props {
   result: QueryResult
   exporting: boolean
   onExport: (format: ExportFormat) => void
   onSave: (changes: CellChange[]) => Promise<boolean>
+  /** State saved when this result was last on screen (restored if it is for the same result). */
+  viewState?: ResultViewState
+  onViewStateChange?: (state: ResultViewState) => void
 }
 
-type EditMap = Record<number, Record<string, unknown>>
-
-export function ResultTable({ result, exporting, onExport, onSave }: Props): React.JSX.Element {
-  const [rows, setRows] = useState(result.rows)
-  const [edits, setEdits] = useState<EditMap>({})
+export function ResultTable({
+  result,
+  exporting,
+  onExport,
+  onSave,
+  viewState,
+  onViewStateChange
+}: Props): React.JSX.Element {
+  // Restore what this result looked like before the user switched tabs.
+  const saved = viewState?.result === result ? viewState : undefined
+  const [rows, setRows] = useState(saved?.rows ?? result.rows)
+  const [edits, setEdits] = useState<EditMap>(saved?.edits ?? {})
   const [editing, setEditing] = useState<{ row: number; col: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [filter, setFilter] = useState('')
-  const [sort, setSort] = useState<SortState | null>(null)
+  const [filter, setFilter] = useState(saved?.filter ?? '')
+  const [sort, setSort] = useState<SortState | null>(saved?.sort ?? null)
   /** Highlighted row (index into `rows`, so it survives sorting and filtering). */
-  const [selectedRow, setSelectedRow] = useState<number | null>(null)
+  const [selectedRow, setSelectedRow] = useState<number | null>(saved?.selectedRow ?? null)
   const scrollRef = useRef<HTMLDivElement>(null)
   // Mirror for key repeat: several keydowns can arrive before React re-renders.
   const selectedRef = useRef<number | null>(null)
   selectedRef.current = selectedRow
+  const scrollPos = useRef({ top: saved?.scrollTop ?? 0, left: saved?.scrollLeft ?? 0 })
+  const shownResult = useRef(result)
 
-  // Reset local state whenever a new result arrives.
+  // Report state to the parent so it survives a tab switch (remount).
+  const report = useRef(onViewStateChange)
+  report.current = onViewStateChange
+  const snapshot = (): ResultViewState => ({
+    result: shownResult.current,
+    rows,
+    edits,
+    filter,
+    sort,
+    selectedRow,
+    scrollTop: scrollPos.current.top,
+    scrollLeft: scrollPos.current.left
+  })
+  const latest = useRef(snapshot)
+  latest.current = snapshot
   useEffect(() => {
+    report.current?.(latest.current())
+  }, [rows, edits, filter, sort, selectedRow])
+
+  // Put the scroll position back after a remount (the table must be laid out first).
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (el && saved) {
+      el.scrollTop = saved.scrollTop
+      el.scrollLeft = saved.scrollLeft
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Reset local state when a different result arrives (a new run) — not on remount.
+  useEffect(() => {
+    if (shownResult.current === result) return
+    shownResult.current = result
+    scrollPos.current = { top: 0, left: 0 }
     setRows(result.rows)
     setEdits({})
     setEditing(null)
@@ -321,6 +384,10 @@ export function ResultTable({ result, exporting, onExport, onSave }: Props): Rea
         ref={scrollRef}
         tabIndex={0}
         onKeyDown={handleGridKey}
+        onScroll={(e) => {
+          scrollPos.current = { top: e.currentTarget.scrollTop, left: e.currentTarget.scrollLeft }
+          report.current?.(latest.current())
+        }}
         className="min-h-0 flex-1 scroll-pt-8 overflow-auto outline-none"
       >
         <table className="w-full border-collapse text-[13px]">

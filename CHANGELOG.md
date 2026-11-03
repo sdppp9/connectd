@@ -6,6 +6,22 @@ follow [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-03
+
+### Added
+- Export a database's structure to a `.sql` file, from **Backup & Export**: choose
+  **Structure only** (no data) or **Structure + sample rows** (the first 10 rows of each table by
+  default, adjustable). Sample files restore cleanly even when a sampled row points at a row that
+  was left out; foreign keys still apply to new rows.
+
+### Fixed
+- Switching between query tabs no longer resets the result grid: sort order, filter, the
+  highlighted row, scroll position and unsaved edits are kept per tab. Values written by
+  **Save changes** also stay after switching (they used to revert on screen).
+- Running a new query, opening another page of table data or closing a tab now asks first when the
+  result has unsaved edits, instead of silently discarding them.
+- Export (CSV / JSON / Excel) now includes values saved from the grid.
+
 ## [1.2.0] - 2026-09-30
 
 ### Added
@@ -43,6 +59,7 @@ First release.
   `pg_dump --inserts` files.
 - Windows build as a zip (unzip and run `ConnectD.exe`).
 
-[Unreleased]: https://github.com/sdppp9/connectd/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/sdppp9/connectd/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/sdppp9/connectd/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sdppp9/connectd/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sdppp9/connectd/releases/tag/v1.1.0

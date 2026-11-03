@@ -37,6 +37,13 @@ interface Props {
 
 type Tab = 'backup' | 'restore'
 
+type ContentMode = 'full' | 'structure' | 'sample'
+const CONTENT_MODES: { value: ContentMode; label: string; hint: string }[] = [
+  { value: 'full', label: 'Structure + all data', hint: 'full backup' },
+  { value: 'structure', label: 'Structure only', hint: 'no data' },
+  { value: 'sample', label: 'Structure + sample rows', hint: 'small file for dev / testing' }
+]
+
 const NEW_DB = '\u0000new'
 
 const selCls =
@@ -61,7 +68,7 @@ export function BackupDialog({
       <div className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-700">
           <h2 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-100">
-            <DatabaseBackup size={18} className="text-indigo-500" /> Backup &amp; restore
+            <DatabaseBackup size={18} className="text-indigo-500" /> Backup, export &amp; restore
           </h2>
           <button
             onClick={onClose}
@@ -85,7 +92,7 @@ export function BackupDialog({
               }`}
             >
               {t === 'backup' ? <DatabaseBackup size={14} /> : <ArchiveRestore size={14} />}
-              {t === 'backup' ? 'Backup' : 'Restore'}
+              {t === 'backup' ? 'Backup / export' : 'Restore'}
             </button>
           ))}
         </div>
@@ -245,7 +252,8 @@ function BackupPane({
   const [connId, setConnId] = useState(defaultConnectionId ?? '')
   const [db, setDb] = useState(defaultDatabase ?? '')
   const { dbs, loading } = useDatabases(connId)
-  const [includeData, setIncludeData] = useState(true)
+  const [mode, setMode] = useState<ContentMode>('full')
+  const [sampleRows, setSampleRows] = useState(10)
   const [compress, setCompress] = useState(true)
   const [jobId, setJobId] = useState<string | null>(null)
   const [startedAt, setStartedAt] = useState(0)
@@ -268,7 +276,12 @@ function BackupPane({
     setStartedAt(Date.now())
     setCancelling(false)
     onBusy(true)
-    const res = await window.api.backupDatabase(id, connId, db, { includeData, compress, target: 'ask' })
+    const res = await window.api.backupDatabase(id, connId, db, {
+      includeData: mode !== 'structure',
+      sampleRows: mode === 'sample' ? sampleRows : undefined,
+      compress,
+      target: 'ask'
+    })
     onBusy(false)
     setJobId(null)
     if (!res.ok) {
@@ -278,7 +291,7 @@ function BackupPane({
     }
     if (res.data) {
       setResult(res.data)
-      toast.success('Backup complete')
+      toast.success(mode === 'full' ? 'Backup complete' : 'Structure exported')
     }
   }
 
@@ -302,15 +315,41 @@ function BackupPane({
       </div>
 
       <div className="flex flex-col gap-2 text-sm text-slate-600 dark:text-slate-300">
-        <div className="flex gap-4">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input type="radio" className="accent-indigo-600" checked={includeData} disabled={running} onChange={() => setIncludeData(true)} />
-            Structure + data
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input type="radio" className="accent-indigo-600" checked={!includeData} disabled={running} onChange={() => setIncludeData(false)} />
-            Structure only
-          </label>
+        <div className="flex flex-col gap-1.5">
+          {CONTENT_MODES.map((m) => (
+            <label key={m.value} className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                className="accent-indigo-600"
+                checked={mode === m.value}
+                disabled={running}
+                onChange={() => {
+                  setMode(m.value)
+                  // A structure export is usually read or diffed as plain text.
+                  setCompress(m.value === 'full')
+                }}
+              />
+              {m.value === 'sample' ? (
+                <span className="flex items-center gap-1.5">
+                  Structure + first
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={sampleRows}
+                    disabled={running}
+                    onFocus={() => setMode('sample')}
+                    onChange={(e) => setSampleRows(Math.min(1000, Math.max(1, Math.floor(Number(e.target.value) || 1))))}
+                    className="h-6 w-16 rounded border border-slate-300 bg-white px-1.5 text-sm text-slate-700 outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                  rows of each table
+                </span>
+              ) : (
+                m.label
+              )}
+              <span className="text-xs text-slate-400">{m.hint}</span>
+            </label>
+          ))}
         </div>
         <label className="flex cursor-pointer items-center gap-2">
           <input type="checkbox" className="accent-indigo-600" checked={compress} disabled={running} onChange={(e) => setCompress(e.target.checked)} />
@@ -319,8 +358,11 @@ function BackupPane({
       </div>
 
       <p className="text-xs text-slate-400">
-        Reads a consistent snapshot (other users can keep working) and writes a plain SQL file with tables, data,
+        Reads a consistent snapshot (other users can keep working) and writes a plain SQL file with tables,
+        {mode === 'structure' ? ' ' : ' data, '}
         indexes, foreign keys, views, routines/functions and triggers. The database is only read, never changed.
+        {mode === 'sample' &&
+          ' Sampled rows may reference rows that were not included, so foreign keys are not checked for them on restore.'}
       </p>
 
       {running ? (
@@ -336,7 +378,7 @@ function BackupPane({
       ) : (
         <div className="flex justify-end">
           <Button variant="primary" onClick={run} disabled={!connId || !db} icon={<DatabaseBackup size={15} />}>
-            Back up…
+            {mode === 'full' ? 'Back up…' : 'Export structure…'}
           </Button>
         </div>
       )}
@@ -344,7 +386,7 @@ function BackupPane({
       {result && !running && (
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
           <div className="flex items-center gap-2 font-medium text-emerald-600 dark:text-emerald-400">
-            <CheckCircle2 size={16} /> Backup complete
+            <CheckCircle2 size={16} /> {mode === 'full' ? 'Backup complete' : 'Export complete'}
           </div>
           <div className="mt-1 break-all font-mono text-xs text-slate-600 dark:text-slate-300">{result.filePath}</div>
           <div className="mt-1 text-xs text-slate-500">

@@ -1,6 +1,6 @@
 import mysql from 'mysql2/promise'
 import type { ConnectionConfig, JobProgress } from '../../shared/types'
-import { checkCancelled, type DumpWriter, type Job } from './writer'
+import { checkCancelled, describeContents, type DumpContents, type DumpWriter, type Job } from './writer'
 
 const BINARY_TYPES = new Set([
   'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob', 'bit',
@@ -52,11 +52,12 @@ export async function dumpMySql(
   password: string | undefined,
   database: string,
   w: DumpWriter,
-  includeData: boolean,
+  contents: DumpContents,
   job: Job,
   progress: Progress
 ): Promise<{ tables: number; rows: number }> {
   const conn = await mysql.createConnection(mysqlOptions(config, password, database))
+  const { includeData, sampleRows } = contents
   let totalRows = 0
   try {
     await conn.query("SET SESSION time_zone = '+00:00'")
@@ -79,7 +80,7 @@ export async function dumpMySql(
         `-- Database: ${database}`,
         `-- Server: ${ver.v}`,
         `-- Created: ${new Date().toISOString()}`,
-        `-- Contents: ${includeData ? 'structure + data' : 'structure only'}`,
+        `-- Contents: ${describeContents(contents)}`,
         '',
         'SET NAMES utf8mb4;',
         "SET TIME_ZONE = '+00:00';",
@@ -116,7 +117,9 @@ export async function dumpMySql(
       const core = (conn as unknown as { connection: { query: (o: object) => { stream: () => AsyncIterable<unknown[]> } } }).connection
       const stream = core
         .query({
-          sql: `SELECT ${dataCols.map((c) => q(String(c.name))).join(', ')} FROM ${q(t)}`,
+          sql:
+            `SELECT ${dataCols.map((c) => q(String(c.name))).join(', ')} FROM ${q(t)}` +
+            (sampleRows !== undefined ? ` LIMIT ${Math.max(0, Math.floor(sampleRows))}` : ''),
           rowsAsArray: true,
           // Everything as text (in the connection's utf8mb4) or raw bytes for binary columns.
           typeCast: (field: { name: string; string: (enc?: string) => string | null; buffer: () => Buffer | null }) =>

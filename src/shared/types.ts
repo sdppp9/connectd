@@ -235,6 +235,11 @@ export type Result<T> = Ok<T> | Err
 export interface BackupOptions {
   /** false = structure only. */
   includeData: boolean
+  /**
+   * With includeData: dump at most this many rows per table (a sample for dev/test
+   * databases). Omit for all rows.
+   */
+  sampleRows?: number
   /** Write .sql.gz instead of .sql. */
   compress: boolean
   /** 'ask' shows a save dialog; 'auto' writes to Documents/ConnectD Backups. */

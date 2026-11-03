@@ -28,7 +28,8 @@ are kept.
 3. Type SQL in the editor (autocomplete suggests tables and columns) and press
    **Ctrl + Enter** or **Run**. Highlight part of the script to run only that part.
 4. Double-click a cell in the result to edit it, then **Save changes**.
-5. **Compare & Sync** and **Backup** are in the top bar. Back up before syncing to production.
+5. **Compare & Sync** and **Backup & Export** are in the top bar. Back up before syncing to production.
+   Export the structure only (or with 10 sample rows per table) from **Backup & Export**.
 6. Moving to another PC: use **Export connections** in the sidebar header, then
    **Import connections** on the other machine.
 
@@ -91,6 +92,8 @@ are kept.
   backup of the target). PostgreSQL restores can run in one transaction. Also restores
   `mysqldump` files and `pg_dump --inserts` files. Auto backups go to
   `Documents\ConnectD Backups`.
+  **Structure export:** the same dialog writes structure only (no data) or structure plus the
+  first N rows of each table (default 10) — handy for setting up a dev database.
   Not included: users/grants, events (MySQL), RLS policies and custom non-enum types (PostgreSQL).
 - **Modern UI** — Tailwind CSS, dark mode by default (toggle to light), Lucide icons.
 

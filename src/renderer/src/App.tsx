@@ -21,7 +21,7 @@ import { ConnectionForm } from './components/ConnectionForm'
 import { DatabaseSelector } from './components/DatabaseSelector'
 import { SchemaTree } from './components/SchemaTree'
 import { QueryEditor } from './components/QueryEditor'
-import { ResultTable } from './components/ResultTable'
+import { ResultTable, type ResultViewState } from './components/ResultTable'
 import { HistoryPanel } from './components/HistoryPanel'
 import { SavedQueriesPanel } from './components/SavedQueriesPanel'
 import { CompareDialog } from './components/CompareDialog'
@@ -136,6 +136,8 @@ function Workspace(): React.JSX.Element {
 
   const [tabs, setTabs] = useState<Tab[]>(restoreInitialTabs)
   const [activeTabId, setActiveTabId] = useState<string>(() => tabs[0].id)
+  const activeTabIdRef = useRef(activeTabId)
+  activeTabIdRef.current = activeTabId
 
   const [connections, setConnections] = useState<ConnectionConfig[]>([])
   const [refreshingSchema, setRefreshingSchema] = useState(false)
@@ -212,6 +214,8 @@ function Workspace(): React.JSX.Element {
   // Mirror of tabs for use inside async callbacks without stale closures.
   const tabsRef = useRef(tabs)
   tabsRef.current = tabs
+  // Result grid state per tab (edits, sort, filter, scroll); the grid remounts on tab switch.
+  const viewStates = useRef(new Map<string, ResultViewState>())
 
   const patchTab = useCallback((id: string, patch: Partial<Tab>) => {
     setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t)))
@@ -326,6 +330,24 @@ function Workspace(): React.JSX.Element {
     localStorage.setItem('theme', next ? 'dark' : 'light')
   }
 
+  /** Number of edited cells not yet saved in a tab's current result. */
+  function pendingEdits(tabId: string): number {
+    const t = tabsRef.current.find((x) => x.id === tabId)
+    const v = viewStates.current.get(tabId)
+    if (!t?.result || !v || v.result !== t.result) return 0
+    return Object.values(v.edits).reduce((n, cols) => n + Object.keys(cols).length, 0)
+  }
+
+  /** Asks before an action that would throw away a tab's unsaved edits. */
+  async function confirmDiscardEdits(tabId: string): Promise<boolean> {
+    const n = pendingEdits(tabId)
+    if (n === 0) return true
+    return confirm(`This tab has ${n} unsaved change(s) in the result. Discard them?`, {
+      title: 'Unsaved changes',
+      danger: true
+    })
+  }
+
   // ---- Tab actions ----
   function handleNewTab(): void {
     const t = newTab()
@@ -334,6 +356,10 @@ function Workspace(): React.JSX.Element {
   }
 
   async function handleCloseTab(id: string): Promise<void> {
+    if (!(await confirmDiscardEdits(id))) return
+    viewStates.current.delete(id)
+    const tabs = tabsRef.current
+    const activeTabId = activeTabIdRef.current
     const tab = tabs.find((t) => t.id === id)
     if (tab?.connectionId) void window.api.disconnect(id)
     const remaining = tabs.filter((t) => t.id !== id)
@@ -450,6 +476,7 @@ function Workspace(): React.JSX.Element {
     // Highlighted text runs on its own; otherwise the whole editor.
     const sql = selectedSql.trim() ? selectedSql : tab.sql
     if (!sql.trim()) return
+    if (!(await confirmDiscardEdits(tab.id))) return
     patchTab(tab.id, { running: true, queryError: null, browse: null })
     const res = await window.api.query(tab.id, sql)
     patchTab(tab.id, { running: false })
@@ -468,7 +495,11 @@ function Workspace(): React.JSX.Element {
     const res = await window.api.exportResult({
       format,
       columns: tab.result.columns,
-      rows: tab.result.rows,
+      // Rows as last shown, including values written back by Save changes.
+      rows: (() => {
+        const v = viewStates.current.get(tab.id)
+        return v && v.result === tab.result ? v.rows : tab.result.rows
+      })(),
       suggestedName: tab.connectionName ?? 'result'
     })
     setExporting(false)
@@ -526,6 +557,7 @@ function Workspace(): React.JSX.Element {
   ): Promise<void> {
     const t = tabsRef.current.find((x) => x.id === tabId)
     if (!t) return
+    if (!(await confirmDiscardEdits(tabId))) return
     patchTab(tabId, { running: true, queryError: null })
 
     let totalRows = totalRowsKnown
@@ -713,8 +745,13 @@ function Workspace(): React.JSX.Element {
             >
               Compare &amp; Sync
             </Button>
-            <Button variant="ghost" onClick={() => setBackupOpen(true)} icon={<DatabaseBackup size={15} />}>
-              Backup
+            <Button
+              variant="ghost"
+              onClick={() => setBackupOpen(true)}
+              icon={<DatabaseBackup size={15} />}
+              title="Back up, export structure (.sql) or restore a database"
+            >
+              Backup &amp; Export
             </Button>
             <Button variant="ghost" onClick={() => setSavedOpen(true)} icon={<BookMarked size={15} />}>
               Saved
@@ -832,6 +869,8 @@ function Workspace(): React.JSX.Element {
                 <ResultTable
                   key={activeTab.id}
                   result={activeTab.result}
+                  viewState={viewStates.current.get(activeTab.id)}
+                  onViewStateChange={(v) => viewStates.current.set(activeTab.id, v)}
                   exporting={exporting}
                   onExport={handleExport}
                   onSave={handleSaveChanges}
