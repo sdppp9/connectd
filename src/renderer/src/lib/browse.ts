@@ -6,23 +6,42 @@ function quoteChar(dbType: DbType | null): string {
   return dbType === 'postgres' ? '"' : '`'
 }
 
-/** Quotes a possibly db-qualified table identifier for the given dialect. */
-export function qualifiedTable(dbType: DbType | null, database: string, table: string): string {
+function quoteIdent(dbType: DbType | null, name: string): string {
   const q = quoteChar(dbType)
-  const qi = (s: string): string => q + s.split(q).join(q + q) + q
-  return `${qi(database)}.${qi(table)}`
+  return q + name.split(q).join(q + q) + q
 }
 
-/** SELECT * with a LIMIT/OFFSET page for browsing a table's rows. */
+/** Quotes a possibly db-qualified table identifier for the given dialect. */
+export function qualifiedTable(dbType: DbType | null, database: string, table: string): string {
+  return `${quoteIdent(dbType, database)}.${quoteIdent(dbType, table)}`
+}
+
+export interface BrowseOrder {
+  column: string
+  dir: 'asc' | 'desc'
+}
+
+/**
+ * SELECT * with a LIMIT/OFFSET page for browsing a table's rows, optionally sorted by the
+ * database. `tiebreak` (the primary key) keeps pages stable when the sort column has duplicates.
+ */
 export function buildPageSql(
   dbType: DbType | null,
   database: string,
   table: string,
   page: number,
-  pageSize = PAGE_SIZE
+  pageSize = PAGE_SIZE,
+  order: BrowseOrder | null = null,
+  tiebreak: string[] = []
 ): string {
   const t = qualifiedTable(dbType, database, table)
-  return `SELECT * FROM ${t} LIMIT ${pageSize} OFFSET ${page * pageSize}`
+  let orderBy = ''
+  if (order) {
+    const dir = order.dir === 'desc' ? 'DESC' : 'ASC'
+    const cols = [order.column, ...tiebreak.filter((c) => c !== order.column)]
+    orderBy = ` ORDER BY ${cols.map((c) => `${quoteIdent(dbType, c)} ${dir}`).join(', ')}`
+  }
+  return `SELECT * FROM ${t}${orderBy} LIMIT ${pageSize} OFFSET ${page * pageSize}`
 }
 
 /** COUNT(*) to know how many pages exist. */

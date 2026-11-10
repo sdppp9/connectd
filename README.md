@@ -73,6 +73,8 @@ are kept.
 - **Result grid** — filter, sortable columns, row count and execution time; `NULL` shown
   distinctly. Duplicate column names from joins are kept apart (`o.id`, `c.id`).
   Click a row to highlight the whole record (↑ / ↓ to move, Esc to clear).
+  While browsing a table (View data, 100 rows per page), header clicks sort the whole table in
+  the database (`ORDER BY`); First / Prev / Next / Last move between pages.
 - **Inline editing, including joins** — the server reports which table and column every
   result column comes from; each source table whose full primary key is in the result is
   editable (double-click a cell). **Save changes** writes parameterized `UPDATE`s for all

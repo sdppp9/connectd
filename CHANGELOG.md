@@ -6,6 +6,20 @@ follow [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-10
+
+### Added
+- While browsing a table (**View data**), clicking a column header now sorts the whole table in
+  the database (`ORDER BY … ASC`, then `DESC`, then off) instead of only the 100 rows on the page.
+  For example, sort `id` descending to see the newest records first. Paging keeps the order, ties
+  are broken by the primary key so no row is skipped or repeated, and the active sort is shown
+  in the paging bar with a button to clear it.
+- **First** and **Last** page buttons in the paging bar.
+
+### Changed
+- In a normal query result, header sorting still sorts only the rows returned (its tooltip now
+  says so). Add `ORDER BY` to the query to sort in the database.
+
 ## [1.3.0] - 2026-11-03
 
 ### Added
@@ -59,7 +73,8 @@ First release.
   `pg_dump --inserts` files.
 - Windows build as a zip (unzip and run `ConnectD.exe`).
 
-[Unreleased]: https://github.com/sdppp9/connectd/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/sdppp9/connectd/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/sdppp9/connectd/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/sdppp9/connectd/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sdppp9/connectd/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sdppp9/connectd/releases/tag/v1.1.0

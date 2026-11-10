@@ -67,6 +67,15 @@ interface Props {
   /** State saved when this result was last on screen (restored if it is for the same result). */
   viewState?: ResultViewState
   onViewStateChange?: (state: ResultViewState) => void
+  /**
+   * When set (browsing a table), header clicks ask the database to sort the whole table
+   * (ORDER BY) instead of sorting only the rows on screen.
+   */
+  serverSort?: {
+    order: { column: string; dir: SortDir } | null
+    onSort: (column: string) => void
+    busy: boolean
+  }
 }
 
 export function ResultTable({
@@ -75,7 +84,8 @@ export function ResultTable({
   onExport,
   onSave,
   viewState,
-  onViewStateChange
+  onViewStateChange,
+  serverSort
 }: Props): React.JSX.Element {
   // Restore what this result looked like before the user switched tabs.
   const saved = viewState?.result === result ? viewState : undefined
@@ -174,7 +184,7 @@ export function ResultTable({
         result.columns.some((col) => formatCell(effective(i, col, row)).text.toLowerCase().includes(f))
       )
     }
-    if (sort) {
+    if (sort && !serverSort) {
       const { column, dir } = sort
       items = [...items].sort((a, b) => {
         const c = compareValues(effective(a.i, column, a.row), effective(b.i, column, b.row))
@@ -183,9 +193,13 @@ export function ResultTable({
     }
     return items
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, edits, filter, sort, result.columns])
+  }, [rows, edits, filter, sort, result.columns, !!serverSort])
 
   function toggleSort(col: string): void {
+    if (serverSort) {
+      if (!serverSort.busy) serverSort.onSort(col)
+      return
+    }
     setSort((prev) => {
       if (!prev || prev.column !== col) return { column: col, dir: 'asc' }
       if (prev.dir === 'asc') return { column: col, dir: 'desc' }
@@ -323,7 +337,7 @@ export function ResultTable({
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter rows…"
+            placeholder={serverSort ? 'Filter this page…' : 'Filter rows…'}
             className="h-7 w-44 rounded-md border border-slate-300 bg-white pl-7 pr-6 text-xs text-slate-700 outline-none focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
           />
           {filter && (
@@ -397,13 +411,18 @@ export function ResultTable({
                 #
               </th>
               {result.columns.map((col) => {
-                const active = sort?.column === col
+                const shownSort = serverSort ? serverSort.order : sort
+                const active = shownSort?.column === col
                 return (
                   <th
                     key={col}
                     onClick={() => toggleSort(col)}
                     className="cursor-pointer select-none border-b border-r border-slate-200 px-3 py-1.5 text-left font-semibold text-slate-600 hover:bg-slate-200/70 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700/60"
-                    title="Click to sort"
+                    title={
+                      serverSort
+                        ? 'Click to sort the whole table in the database (ORDER BY): ascending, descending, off'
+                        : 'Click to sort the rows shown'
+                    }
                   >
                     <span className="inline-flex items-center gap-1">
                       {pkCols.has(col) && <span className="text-amber-400">●</span>}
@@ -414,7 +433,7 @@ export function ResultTable({
                       )}
                       {col}
                       {active ? (
-                        sort!.dir === 'asc' ? (
+                        shownSort!.dir === 'asc' ? (
                           <ChevronUp size={13} className="text-indigo-500" />
                         ) : (
                           <ChevronDown size={13} className="text-indigo-500" />

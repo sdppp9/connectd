@@ -33,9 +33,9 @@ import {
 import { TableStructureDialog } from './components/TableStructureDialog'
 import { TabBar, type TabMeta } from './components/TabBar'
 import { loadSession, saveSession } from './lib/session'
-import { PAGE_SIZE, buildPageSql, buildCountSql } from './lib/browse'
+import { PAGE_SIZE, buildPageSql, buildCountSql, type BrowseOrder } from './lib/browse'
 import { clamp, readNumberPref, writePref } from './lib/prefs'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X } from 'lucide-react'
 import type {
   CellChange,
   ConnectionConfig,
@@ -76,6 +76,8 @@ interface BrowseState {
   table: string
   page: number
   totalRows: number
+  /** ORDER BY applied by the database (header click), or null for table order. */
+  order: BrowseOrder | null
 }
 
 interface ConfirmState {
@@ -553,7 +555,8 @@ function Workspace(): React.JSX.Element {
     database: string,
     table: string,
     page: number,
-    totalRowsKnown?: number
+    totalRowsKnown?: number,
+    order: BrowseOrder | null = null
   ): Promise<void> {
     const t = tabsRef.current.find((x) => x.id === tabId)
     if (!t) return
@@ -571,7 +574,12 @@ function Workspace(): React.JSX.Element {
       }
     }
 
-    const pageSql = buildPageSql(t.dbType, database, table, page, PAGE_SIZE)
+    const pk =
+      t.schema?.tables
+        .find((x) => x.database === database && x.name === table)
+        ?.columns.filter((c) => c.isPrimaryKey)
+        .map((c) => c.name) ?? []
+    const pageSql = buildPageSql(t.dbType, database, table, page, PAGE_SIZE, order, pk)
     const res = await window.api.query(tabId, pageSql)
     patchTab(tabId, { running: false })
     await refreshHistory()
@@ -583,7 +591,7 @@ function Workspace(): React.JSX.Element {
       result: res.data,
       queryError: null,
       sql: pageSql,
-      browse: { database, table, page, totalRows: totalRows ?? 0 }
+      browse: { database, table, page, totalRows: totalRows ?? 0, order }
     })
   }
 
@@ -613,7 +621,19 @@ function Workspace(): React.JSX.Element {
   function browseToPage(page: number): void {
     const tab = activeTab
     if (!tab.browse) return
-    void loadBrowsePage(tab.id, tab.browse.database, tab.browse.table, page, tab.browse.totalRows)
+    const b = tab.browse
+    void loadBrowsePage(tab.id, b.database, b.table, page, b.totalRows, b.order)
+  }
+
+  /** Header click while browsing: ASC → DESC → table order, sorted by the database. */
+  function browseSort(column: string): void {
+    const tab = activeTab
+    if (!tab.browse) return
+    const b = tab.browse
+    const cur = b.order?.column === column ? b.order.dir : null
+    const next: BrowseOrder | null =
+      cur === null ? { column, dir: 'asc' } : cur === 'asc' ? { column, dir: 'desc' } : null
+    void loadBrowsePage(tab.id, b.database, b.table, 0, b.totalRows, next)
   }
 
   function openSaveModal(): void {
@@ -861,8 +881,12 @@ function Workspace(): React.JSX.Element {
               {activeTab.browse && (
                 <PaginationBar
                   browse={activeTab.browse}
-                  onPrev={() => browseToPage(activeTab.browse!.page - 1)}
-                  onNext={() => browseToPage(activeTab.browse!.page + 1)}
+                  busy={activeTab.running}
+                  onPage={browseToPage}
+                  onClearOrder={() => {
+                    const b = activeTab.browse!
+                    void loadBrowsePage(activeTab.id, b.database, b.table, 0, b.totalRows, null)
+                  }}
                 />
               )}
               <div className="min-h-0 flex-1">
@@ -874,6 +898,11 @@ function Workspace(): React.JSX.Element {
                   exporting={exporting}
                   onExport={handleExport}
                   onSave={handleSaveChanges}
+                  serverSort={
+                    activeTab.browse
+                      ? { order: activeTab.browse.order, onSort: browseSort, busy: activeTab.running }
+                      : undefined
+                  }
                 />
               </div>
             </div>
@@ -1035,18 +1064,20 @@ function Centered({ children }: { children: React.ReactNode }): React.JSX.Elemen
 
 function PaginationBar({
   browse,
-  onPrev,
-  onNext
+  busy,
+  onPage,
+  onClearOrder
 }: {
   browse: BrowseState
-  onPrev: () => void
-  onNext: () => void
+  busy: boolean
+  onPage: (page: number) => void
+  onClearOrder: () => void
 }): React.JSX.Element {
   const from = browse.totalRows === 0 ? 0 : browse.page * PAGE_SIZE + 1
   const to = Math.min((browse.page + 1) * PAGE_SIZE, browse.totalRows)
-  const hasPrev = browse.page > 0
-  const hasNext = to < browse.totalRows
   const totalPages = Math.max(1, Math.ceil(browse.totalRows / PAGE_SIZE))
+  const hasPrev = browse.page > 0
+  const hasNext = browse.page < totalPages - 1
   return (
     <div className="flex items-center gap-3 border-b border-slate-200 bg-indigo-500/5 px-3 py-1.5 text-xs dark:border-slate-800">
       <span className="font-medium text-slate-600 dark:text-slate-300">
@@ -1055,15 +1086,35 @@ function PaginationBar({
       <span className="text-slate-400">
         {from.toLocaleString()}–{to.toLocaleString()} of {browse.totalRows.toLocaleString()} rows
       </span>
+      {browse.order && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 px-2 py-0.5 font-mono text-[11px] text-indigo-600 dark:text-indigo-300">
+          ORDER BY {browse.order.column} {browse.order.dir.toUpperCase()}
+          <button
+            onClick={onClearOrder}
+            disabled={busy}
+            title="Back to table order"
+            aria-label="Clear sort"
+            className="rounded-full p-0.5 hover:bg-indigo-500/20"
+          >
+            <X size={11} />
+          </button>
+        </span>
+      )}
       <div className="ml-auto flex items-center gap-1">
         <span className="mr-1 text-slate-400">
-          Page {browse.page + 1} / {totalPages}
+          Page {(browse.page + 1).toLocaleString()} / {totalPages.toLocaleString()}
         </span>
-        <Button variant="secondary" onClick={onPrev} disabled={!hasPrev} icon={<ChevronLeft size={14} />}>
+        <Button variant="secondary" onClick={() => onPage(0)} disabled={!hasPrev || busy} title="First page" aria-label="First page">
+          <ChevronsLeft size={14} />
+        </Button>
+        <Button variant="secondary" onClick={() => onPage(browse.page - 1)} disabled={!hasPrev || busy} icon={<ChevronLeft size={14} />}>
           Prev
         </Button>
-        <Button variant="secondary" onClick={onNext} disabled={!hasNext}>
+        <Button variant="secondary" onClick={() => onPage(browse.page + 1)} disabled={!hasNext || busy}>
           Next <ChevronRight size={14} />
+        </Button>
+        <Button variant="secondary" onClick={() => onPage(totalPages - 1)} disabled={!hasNext || busy} title="Last page" aria-label="Last page">
+          <ChevronsRight size={14} />
         </Button>
       </div>
     </div>
